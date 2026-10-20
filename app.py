@@ -12,7 +12,7 @@
 
 from fastapi import FastAPI, Query
 
-from day1_word_freq import DATA, count_words, load_text, tokenize, top_n
+from day1_word_freq import DATA, count_words, load_text, tokenize,top_n
 
 app = FastAPI(title="Word Frequency API")
 
@@ -24,10 +24,16 @@ def root() -> dict:
 
 @app.get("/top")
 def top(n: int = Query(default=10, ge=1, le=50)) -> list[dict]:
-    # TODO:
     # 1. text = load_text(DATA)
     # 2. words = tokenize(text)
     # 3. counts = count_words(words)
     # 4. pairs = top_n(counts, n)          -> [("system", 4), ("way", 2), ...]
     # 5. 把 pairs 转成 [{"word": ..., "count": ...}, ...] 并 return
-    pass
+    text = load_text(DATA)
+    words = tokenize(text)
+    counts = count_words(words)
+    pairs = top_n(counts, n)
+    ans=[]
+    for word, count in pairs:
+        ans.append({"word": word, "count": count})
+    return ans
