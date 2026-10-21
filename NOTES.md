@@ -59,3 +59,33 @@ python -m venv .venv
 - Python 报错只看最后一行，前面的是调用栈。
 - 看到 `ModuleNotFoundError`，第一反应是"我现在用的是哪个 Python"。
 - 一个函数卡 20 分钟就先跳过；整体卡 2 小时就求助，不硬耗。
+
+---
+
+## Day 3 · 2026-10-21
+
+**目标**：把大模型接进接口。
+
+**完成**
+
+- 用 OpenAI 兼容 SDK 接智谱 `glm-4-flash`
+- `GET /ask?q=` 返回模型回答
+- key 放 `.env`，`.gitignore` 里排掉，不进仓库
+
+**踩坑**
+
+- 老师没教过 SDK，看到 `client.chat.completions.create(...)` 一脸懵。后来知道所有库的读法都一样：先看必填参数（`inspect.signature`），再看官方 quickstart，最后写最小脚本。
+- 改完 `.env` 没重启服务，一直 401。`--reload` 只监听 `.py`，不会重新读 `.env`。
+- 模型的回答是错的：把 RAG 解释成"对话式检索技术"。**调通 ≠ 答对**，这就是以后要做评测集的原因。
+
+**命令**
+
+```powershell
+.\.venv\Scripts\python.exe try_llm.py
+.\.venv\Scripts\python.exe -m uvicorn app:app --reload
+```
+
+**复盘**
+
+- 先让最小脚本跑通，再集成进项目。一次只让一个变量出错。
+- 读陌生库的三个动作：看签名 → 看 quickstart → 跑最小例子。
