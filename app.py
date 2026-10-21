@@ -49,14 +49,14 @@ def top(n: int = Query(default=10, ge=1, le=50)) -> list[dict]:
 
 @app.get("/ask")
 def ask(q: str = Query(..., min_length=1, max_length=500)) -> dict:
-    # TODO（Day 3 就这一件事）：
     resp = client.chat.completions.create(
-    model=MODEL,
-    messages=[
-               {"role": "system", "content": "你是一个简洁的助手，用中文回答。"},
-               {"role": "user", "content": q},
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": "你是一个简洁的助手，用中文回答。"},
+            {"role": "user", "content": q},
         ],
-    max_tokens=200)
+        max_tokens=200,
+    )
     answer = resp.choices[0].message.content
     return {"q": q, "answer": answer}
 
