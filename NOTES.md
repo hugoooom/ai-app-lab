@@ -89,3 +89,35 @@ python -m venv .venv
 
 - 先让最小脚本跑通，再集成进项目。一次只让一个变量出错。
 - 读陌生库的三个动作：看签名 → 看 quickstart → 跑最小例子。
+
+---
+
+## Day 4 · 2026-10-22
+
+**目标**：让模型"记住"上一句话。
+
+**完成**
+
+- `db.py`：SQLite 存储层，`init_db` / `save_message` / `load_messages`
+- `GET /chat?q=&session_id=`：多轮对话
+- `GET /chat/{session_id}/history`：查看某会话的历史
+- 验证：同一个 session 里问"我叫什么"，它能答出"小明"；换个 session 就不知道了
+
+**踩坑 / 想明白的事**
+
+- 模型没有记忆。所谓"多轮对话"，是每次把历史重新拼进 `messages` 再发过去。记忆存在自己这边。
+- `messages` 的顺序是硬性的：system 在最前，历史在中间，这一句在最后。
+- SQL 必须用 `?` 占位符。用 f-string 拼就是注入漏洞。
+- `limit=10` 不是随便写的：上下文越长越贵越慢，还有窗口上限。
+
+**命令**
+
+```powershell
+.\.venv\Scripts\python.exe db.py          # 单独测存储层
+.\.venv\Scripts\python.exe -m uvicorn app:app --reload
+```
+
+**复盘**
+
+- 先测存储层，再接接口。分层测试比一把梭快。
+- 换 session 验证隔离，是比"能用"更进一步的验证。

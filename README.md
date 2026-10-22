@@ -10,7 +10,7 @@
 | 1 | 词频统计（文件 / 字典 / 排序） | ✅ |
 | 2 | FastAPI 封装 `GET /top` 接口 | ✅ |
 | 3 | 接入 LLM API，`GET /ask` 问答 | ✅ |
-| 4 | SQLite 存对话历史 | ⏳ |
+| 4 | SQLite 存对话历史，`GET /chat` 多轮对话 | ✅ |
 | 5 | 部署到公网 | ⏳ |
 
 ## 接口
@@ -48,6 +48,24 @@
 ```
 
 需要在 `.env` 里配置 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL`，参考 `.env.example`。
+
+### `GET /chat?q=...&session_id=...`
+
+多轮对话。同一个 `session_id` 共享上下文，不同 `session_id` 互不可见。
+
+```json
+{"session_id": "test1", "answer": "你叫小明。"}
+```
+
+历史存在 SQLite 的 `chat.db`（已 gitignore），默认取最近 10 条作为上下文。
+
+### `GET /chat/{session_id}/history`
+
+查看某个会话存下来的全部消息，用于调试。
+
+```json
+[{"role": "user", "content": "我叫小明"}, {"role": "assistant", "content": "你好，小明！"}]
+```
 
 ## 本地运行
 
