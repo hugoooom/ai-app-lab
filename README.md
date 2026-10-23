@@ -77,6 +77,23 @@ python -m venv .venv
 
 启动后打开 http://127.0.0.1:8000/docs 可以直接调试接口。
 
+## 部署
+
+线上地址：`https://ai-app-lab.onrender.com`（部署完成后替换成真实地址）
+
+平台是 Render 的免费 Web Service，连接 GitHub 仓库，每次 push 自动部署。
+
+| 配置项 | 值 |
+|---|---|
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `uvicorn app:app --host 0.0.0.0 --port $PORT` |
+| 环境变量 | `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL` |
+
+两个必须知道的限制：
+
+- `.env` 不会上传，密钥在平台后台的环境变量里配置。
+- 免费实例的文件系统是临时的，`chat.db` 重启即清空；闲置一段时间会休眠，冷启动要等 30–60 秒。演示够用，生产要换成托管数据库。
+
 ## 技术栈
 
 - Python 3.13
@@ -88,7 +105,8 @@ python -m venv .venv
 
 ```
 .
-├── app.py              # FastAPI 应用
+├── app.py              # FastAPI 应用（路由层）
+├── db.py               # SQLite 存储层
 ├── day1_word_freq.py   # 词频统计核心逻辑
 ├── try_llm.py          # 最小验证脚本（单独测大模型连通性）
 ├── data/sample.txt     # 测试文本
