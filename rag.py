@@ -24,8 +24,6 @@ def extract_text(pdf_path: Path) -> str:
 
 def split_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
     """把长文本切成大小相近的块。
-
-    要求：
     - 每块最多 chunk_size 个字符
     - 相邻两块之间重叠 overlap 个字符
       （防止一句话正好被切断，两边都读不到完整语义）
@@ -35,7 +33,11 @@ def split_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]
     n=0
     ans=[]
     while len(text)-n>chunk_size:
-        ans.append(text[n:n+chunk_size])
+        piece = text[n:n + chunk_size].strip()
+        if piece:
+            ans.append(piece)
         n+=chunk_size-overlap
-    ans.append(text[n:])
+    piece = text[n:].strip()
+    if piece:
+        ans.append(piece)
     return ans
