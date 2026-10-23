@@ -2,3 +2,6 @@ fastapi
 uvicorn[standard]
 openai
 python-dotenv
+pypdf
+python-multipart
+fpdf2  # 仅用于 tools/make_sample_pdf.py 生成测试文件

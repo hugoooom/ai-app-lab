@@ -9,18 +9,21 @@
     GET /ask?q=...                 单轮问答（无记忆）
     GET /chat?q=...&session_id=    多轮对话（有记忆）
     GET /chat/{session_id}/history 查看某会话历史
+    POST /upload                   上传 PDF，返回切分结果
 
-任务：补完 /chat 里的 TODO。
+任务：补完 rag.py 里的 split_text。
 """
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, File, Query, UploadFile
 from openai import OpenAI
 
 from day1_word_freq import DATA, count_words, load_text, tokenize, top_n
 from db import init_db, load_messages, save_message
+from rag import extract_text, split_text
 
 load_dotenv()
 init_db()
@@ -82,3 +85,22 @@ def chat(
 @app.get("/chat/{session_id}/history")
 def chat_history(session_id: str) -> list[dict]:
     return load_messages(session_id, limit=50)
+
+
+@app.post("/upload")
+async def upload(file: UploadFile = File(...)) -> dict:
+    raw = await file.read()
+
+    tmp_dir = Path("uploads")
+    tmp_dir.mkdir(exist_ok=True)
+    path = tmp_dir / (file.filename or "upload.pdf")
+    path.write_bytes(raw)
+
+    text = extract_text(path)
+    chunks = split_text(text, chunk_size=500, overlap=50)
+    return {
+        "filename": file.filename,
+        "chars": len(text),
+        "chunks": len(chunks),
+        "preview": chunks[:3],
+    }
