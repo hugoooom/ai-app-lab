@@ -79,6 +79,8 @@ curl "http://127.0.0.1:8000/doc/ask?q=What%20is%20chunk%20overlap%3F&doc_id=samp
 
 **问答时强制约束模型。** system prompt 明确「资料里没有就说不知道」，并把命中的原文和相似度一起返回，方便判断它是真读了资料还是在编。
 
+**回答被截断时要让人知道。** `max_tokens` 是硬上限，模型写到一半会被切断。用 `finish_reason == "length"` 判断，接口返回 `truncated: true`，前端给出提示——不然用户会以为那就是完整答案。
+
 **密钥只走环境变量。** `.env` 在 `.gitignore` 里，代码里没有硬编码的 key。
 
 ## 已知限制

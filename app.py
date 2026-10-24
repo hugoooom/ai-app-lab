@@ -43,6 +43,27 @@ client = OpenAI(
 )
 MODEL = os.getenv("LLM_MODEL", "glm-4-flash")
 
+# 回答长度上限。太小会把话截断在半句，太大浪费额度。
+# 用环境变量可以不改代码地调。
+MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1200"))
+
+
+def ask_llm(messages: list[dict]) -> tuple[str, bool]:
+    """调用模型，返回 (回答, 是否被截断)。
+
+    模型因为 max_tokens 用完而停下时，finish_reason 会是 "length"，
+    这时必须告诉调用方"话没说完"，否则前端会以为这就是完整答案。
+    """
+    resp = client.chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        max_tokens=MAX_TOKENS,
+    )
+    choice = resp.choices[0]
+    answer = choice.message.content or ""
+    truncated = choice.finish_reason == "length"
+    return answer, truncated
+
 
 @app.get("/ui", include_in_schema=False)
 def ui() -> FileResponse:
@@ -68,16 +89,13 @@ def top(n: int = Query(default=10, ge=1, le=50)) -> list[dict]:
 
 @app.get("/ask")
 def ask(q: str = Query(..., min_length=1, max_length=500)) -> dict:
-    resp = client.chat.completions.create(
-        model=MODEL,
-        messages=[
+    answer, truncated = ask_llm(
+        [
             {"role": "system", "content": "你是一个简洁的助手，用中文回答。"},
             {"role": "user", "content": q},
-        ],
-        max_tokens=200,
+        ]
     )
-    answer = resp.choices[0].message.content
-    return {"q": q, "answer": answer}
+    return {"q": q, "answer": answer, "truncated": truncated}
 
 
 @app.get("/chat")
@@ -87,11 +105,10 @@ def chat(
 ) -> dict:
     history = load_messages(session_id)
     messages = [{"role": "system", "content": "你是一个简洁的助手，用中文回答。"}] + history + [{"role": "user", "content": q}]
-    resp = client.chat.completions.create(model=MODEL, messages=messages, max_tokens=300)
-    answer = resp.choices[0].message.content
+    answer, truncated = ask_llm(messages)
     save_message(session_id, "user", q)
     save_message(session_id, "assistant", answer)
-    return {"session_id": session_id, "answer": answer}
+    return {"session_id": session_id, "answer": answer, "truncated": truncated}
 
 
 @app.get("/chat/{session_id}/history")
@@ -129,22 +146,24 @@ def doc_ask(
         return {"error": "文档不存在，先调用 /upload"}
 
     context = "\n\n".join(hit["text"] for hit in hits)
-    resp = client.chat.completions.create(
-        model=MODEL,
-        messages=[
+    answer, truncated = ask_llm(
+        [
             {
                 "role": "system",
-                "content": "只根据提供的资料回答。资料里没有的信息，直接说不知道，不要编。",
+                "content": (
+                    "只根据提供的资料回答。资料里没有的信息，直接说不知道，不要编。"
+                    "可以用 Markdown 组织答案，但不要输出大段代码块。"
+                ),
             },
             {
                 "role": "user",
                 "content": f"资料：\n{context}\n\n问题：{q}",
             },
-        ],
-        max_tokens=300,
+        ]
     )
     return {
         "q": q,
-        "answer": resp.choices[0].message.content,
+        "answer": answer,
+        "truncated": truncated,
         "sources": hits,
     }

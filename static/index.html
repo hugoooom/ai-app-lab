@@ -102,8 +102,35 @@
     padding: 32px;
     font-size: 19px;
     line-height: 1.6;
-    white-space: pre-wrap;
   }
+  .answer p { margin: 0 0 16px; }
+  .answer p:last-child { margin-bottom: 0; }
+  .answer h1, .answer h2, .answer h3 {
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    margin: 28px 0 12px;
+  }
+  .answer h1 { font-size: 30px; }
+  .answer h2 { font-size: 25px; }
+  .answer h3 { font-size: 21px; }
+  .answer ul, .answer ol { margin: 0 0 16px; padding-left: 24px; }
+  .answer li { margin-bottom: 6px; }
+  .answer code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.86em;
+    background: var(--canvas-alt);
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .answer pre {
+    background: var(--canvas-alt);
+    padding: 16px 20px;
+    border-radius: 10px;
+    overflow-x: auto;
+  }
+  .answer pre code { background: none; padding: 0; }
+  .answer strong { font-weight: 600; }
+  .warn { margin-top: 16px; font-size: 13px; color: #b25000; }
   .sources { margin-top: 32px; }
   .source {
     border-top: 1px solid var(--hairline);
@@ -224,8 +251,15 @@
     result.innerHTML = "";
     const answer = document.createElement("div");
     answer.className = "answer";
-    answer.textContent = data.answer;
+    answer.innerHTML = mdToHtml(data.answer);
     result.appendChild(answer);
+
+    if (data.truncated) {
+      const warn = document.createElement("p");
+      warn.className = "warn";
+      warn.textContent = "回答达到长度上限，可能没有说完。可以换个更具体的问法。";
+      result.appendChild(warn);
+    }
 
     const list = document.createElement("div");
     list.className = "sources";
@@ -242,6 +276,92 @@
       list.appendChild(item);
     });
     result.appendChild(list);
+  }
+
+  // 极简 Markdown 渲染：先转义，再解析，避免 XSS
+  function mdToHtml(md) {
+    const esc = (s) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const inline = (s) =>
+      esc(s)
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+
+    const lines = md.split("\n");
+    const out = [];
+    let list = null;
+    let i = 0;
+
+    const closeList = () => {
+      if (list) {
+        out.push(`</${list}>`);
+        list = null;
+      }
+    };
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      if (/^```/.test(line)) {
+        closeList();
+        const code = [];
+        i++;
+        while (i < lines.length && !/^```/.test(lines[i])) {
+          code.push(esc(lines[i]));
+          i++;
+        }
+        i++;
+        out.push(`<pre><code>${code.join("\n")}</code></pre>`);
+        continue;
+      }
+
+      const heading = line.match(/^(#{1,6})\s+(.*)$/);
+      if (heading) {
+        closeList();
+        const level = Math.min(heading[1].length, 3);
+        out.push(`<h${level}>${inline(heading[2])}</h${level}>`);
+        i++;
+        continue;
+      }
+
+      const bullet = line.match(/^\s*[-*]\s+(.*)$/);
+      if (bullet) {
+        if (list !== "ul") {
+          closeList();
+          out.push("<ul>");
+          list = "ul";
+        }
+        out.push(`<li>${inline(bullet[1])}</li>`);
+        i++;
+        continue;
+      }
+
+      const numbered = line.match(/^\s*\d+\.\s+(.*)$/);
+      if (numbered) {
+        if (list !== "ol") {
+          closeList();
+          out.push("<ol>");
+          list = "ol";
+        }
+        out.push(`<li>${inline(numbered[1])}</li>`);
+        i++;
+        continue;
+      }
+
+      if (!line.trim()) {
+        closeList();
+        i++;
+        continue;
+      }
+
+      closeList();
+      out.push(`<p>${inline(line)}</p>`);
+      i++;
+    }
+
+    closeList();
+    return out.join("");
   }
 </script>
 </body>
