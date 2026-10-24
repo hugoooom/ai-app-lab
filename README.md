@@ -1,121 +1,125 @@
 # AI App Lab
 
-一个从零开始长起来的 AI 应用开发练习仓库：从最基础的词频统计，逐步做成带 LLM、数据库和公网部署的完整服务。
+一个从零搭起来的 AI 应用，走完了这条链路：
 
+**文本处理 → FastAPI 服务 → 大模型接入 → 多轮记忆 → RAG 检索问答 → 极简前端**
 
-## 进度
+没有框架脚手架，没有前端构建，每一步的取舍和踩坑都记在 [NOTES.md](NOTES.md) 里。
 
-| Day | 内容 | 状态 |
-|---|---|---|
-| 1 | 词频统计（文件 / 字典 / 排序） | ✅ |
-| 2 | FastAPI 封装 `GET /top` 接口 | ✅ |
-| 3 | 接入 LLM API，`GET /ask` 问答 | ✅ |
-| 4 | SQLite 存对话历史，`GET /chat` 多轮对话 | ✅ |
-| 5 | 部署到公网 | ⏳ |
+## 能做什么
 
-## 接口
+- 上传 PDF，自动抽取文字、切分、向量化
+- 用自然语言提问，答案**只基于文档内容**，同时返回命中的原文片段和相似度
+- 多轮对话，同一个会话共享上下文（SQLite 持久化）
+- 单轮问答、词频统计（早期的练习，保留作对照）
 
-### `GET /`
+## 架构
 
-健康检查。
-
-```json
-{"hello": "world"}
+```
+PDF ──pypdf──> 文本 ──split_text──> 分块 ──embedding──> 向量 ──> 内存库
+                                                                  │
+问题 ──embedding──> 向量 ──cosine 相似度──> Top-K 分块 ──> 拼 prompt ──> LLM ──> 回答
 ```
 
-### `GET /top?n=5`
+核心思路就是 RAG 的那句话：**先检索，再生成**。模型不知道你的文档，所以每次提问前，把最相关的几段原文递到它眼前。
 
-返回文本中出现频率最高的 n 个词，`n` 取值 1–50。
-
-```json
-[
-  {"word": "system", "count": 4},
-  {"word": "way", "count": 2},
-  {"word": "build", "count": 2},
-  {"word": "application", "count": 2},
-  {"word": "data", "count": 2}
-]
-```
-
-参数越界会返回 `422`，由 FastAPI 的参数校验自动处理。
-
-### `GET /ask?q=...`
-
-调用大模型回答，`q` 长度 1–500。
-
-```json
-{"q": "用一句话解释什么是 RAG", "answer": "..."}
-```
-
-需要在 `.env` 里配置 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL`，参考 `.env.example`。
-
-### `GET /chat?q=...&session_id=...`
-
-多轮对话。同一个 `session_id` 共享上下文，不同 `session_id` 互不可见。
-
-```json
-{"session_id": "test1", "answer": "你叫小明。"}
-```
-
-历史存在 SQLite 的 `chat.db`（已 gitignore），默认取最近 10 条作为上下文。
-
-### `GET /chat/{session_id}/history`
-
-查看某个会话存下来的全部消息，用于调试。
-
-```json
-[{"role": "user", "content": "我叫小明"}, {"role": "assistant", "content": "你好，小明！"}]
-```
-
-## 本地运行
+## 快速开始
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+copy .env.example .env          # 填入 LLM_API_KEY
 .\.venv\Scripts\python.exe -m uvicorn app:app --reload
 ```
 
-启动后打开 http://127.0.0.1:8000/docs 可以直接调试接口。
+打开：
 
-## 部署
+- **http://127.0.0.1:8000/ui** — 前端页面
+- **http://127.0.0.1:8000/docs** — 交互式 API 文档
 
-线上地址：`https://ai-app-lab.onrender.com`（部署完成后替换成真实地址）
+`.env` 三个变量：
 
-平台是 Render 的免费 Web Service，连接 GitHub 仓库，每次 push 自动部署。
+```
+LLM_API_KEY=你的key
+LLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+LLM_MODEL=glm-4-flash
+```
 
-| 配置项 | 值 |
-|---|---|
-| Build Command | `pip install -r requirements.txt` |
-| Start Command | `uvicorn app:app --host 0.0.0.0 --port $PORT` |
-| 环境变量 | `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL` |
+默认接的是智谱，但用的是 OpenAI 兼容接口，换任何兼容服务商只改 `LLM_BASE_URL` 和 `LLM_MODEL`。
 
-两个必须知道的限制：
+## 接口
 
-- `.env` 不会上传，密钥在平台后台的环境变量里配置。
-- 免费实例的文件系统是临时的，`chat.db` 重启即清空；闲置一段时间会休眠，冷启动要等 30–60 秒。演示够用，生产要换成托管数据库。
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/` | 健康检查 |
+| GET | `/top?n=5` | 词频 Top N |
+| GET | `/ask?q=` | 单轮问答（无记忆） |
+| GET | `/chat?q=&session_id=` | 多轮对话（有记忆） |
+| GET | `/chat/{session_id}/history` | 查看会话历史 |
+| POST | `/upload` | 上传 PDF：切分 + 向量化 + 入索引 |
+| GET | `/doc/ask?q=&doc_id=&k=3` | 基于文档回答问题 |
+| GET | `/ui` | 极简前端 |
+
+示例：
+
+```bash
+curl -X POST http://127.0.0.1:8000/upload -F "file=@data/sample.pdf"
+# {"doc_id":"sample.pdf","chars":1608,"chunks":4}
+
+curl "http://127.0.0.1:8000/doc/ask?q=What%20is%20chunk%20overlap%3F&doc_id=sample.pdf&k=2"
+# {"q":"...","answer":"...","sources":[{"score":0.5329,"text":"..."}]}
+```
+
+## 几个关键取舍
+
+**切 500 字，重叠 50 字。** 太小一句话不完整，检索出来是碎片；太大一块里 90% 是无关内容，精度下降还费 token。重叠是为了防止一句话正好被切在边界上，两块都读不到完整语义。
+
+**embedding 分批发送。** 接口一次最多 64 条，所以按「64 条 / 8000 字」双上限切批；返回结果按 `index` 回填，不假设顺序。
+
+**问答时强制约束模型。** system prompt 明确「资料里没有就说不知道」，并把命中的原文和相似度一起返回，方便判断它是真读了资料还是在编。
+
+**密钥只走环境变量。** `.env` 在 `.gitignore` 里，代码里没有硬编码的 key。
+
+## 已知限制
+
+这是一个学习项目，不是生产系统：
+
+- 向量只存在进程内存里，**服务重启就丢**，需要重新上传
+- 没有鉴权、没有限流，`session_id` 谁拿到谁能读
+- SQLite 存对话，单机可用，不支持并发写入
+- 还没有评测集 —— 检索效果目前靠肉眼看，这不可靠
+
+## 下一步
+
+- [ ] 检索评测：50 条问题 + 标准答案，量出召回率，再调 chunk 参数
+- [ ] 向量持久化（SQLite 存 JSON / Chroma）
+- [ ] 流式输出
+- [ ] 部署到公网
 
 ## 技术栈
 
-- Python 3.13
-- FastAPI + Uvicorn
-- 大模型：OpenAI 兼容接口（默认智谱 `glm-4-flash`）
-- 词频统计为纯标准库实现，无第三方依赖
+Python 3.13 · FastAPI · Uvicorn · OpenAI 兼容 SDK（智谱 `glm-4-flash` / `embedding-3`）· SQLite · pypdf
+
+前端是一张 HTML，没有任何框架或构建步骤。
 
 ## 目录结构
 
 ```
 .
-├── app.py              # FastAPI 应用（路由层）
-├── db.py               # SQLite 存储层
-├── day1_word_freq.py   # 词频统计核心逻辑
-├── try_llm.py          # 最小验证脚本（单独测大模型连通性）
-├── data/sample.txt     # 测试文本
-├── .env.example        # 环境变量模板（复制成 .env 后填 key）
-├── requirements.txt
-└── NOTES.md            # 每日学习记录（踩坑、命令、复盘）
+├── app.py                # FastAPI 路由
+├── rag.py                # 抽取 / 切分 / 向量化 / 检索
+├── db.py                 # SQLite 会话存储
+├── day1_word_freq.py     # 词频统计（Day 1）
+├── static/index.html     # 前端页面
+├── tools/                # 测试辅助脚本
+├── data/sample.pdf       # 测试文档
+├── NOTES.md              # 每日学习记录
+└── requirements.txt
 ```
 
-## 说明
+## 关于这个仓库
 
-- `NOTES.md` 是每天的学习日志，记录原文、命令和踩过的坑，不追求好看。
-- 这个仓库会一直往上加，不做重开。
+起因是想搞清楚 RAG 到底是怎么运转的，所以没有直接拿现成框架拼，而是把每一步拆开自己写一遍：怎么切、怎么算相似度、怎么拼 prompt、怎么防止模型瞎编。
+
+`NOTES.md` 记录了每天做了什么、卡在哪、后来怎么想通的——比 README 更接近真实过程。
